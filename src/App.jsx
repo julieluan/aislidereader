@@ -27,6 +27,9 @@ import {
   Clock,
   Check, 
 } from 'lucide-react';
+import { VoiceButton } from "@/components/ui/voice-button"
+import { LiveWaveform } from "@/components/ui/live-waveform"
+
 
 // --- ElevenLabs 风格的 TagsInput 组件 ---
 const TagsInput = ({ initialTags, label, required, placeholder }) => {
@@ -211,9 +214,14 @@ const TemplatePreviewModal = ({ onClose, template, onUseTemplate }) => {
 
 // --- 更新：Step 1: 教师输入端 (增加模板列表和 Modal 逻辑) ---
 const Step1Input = ({ onNext }) => {
+    
     const [topicName, setTopicName] = useState('Introduction to Cellular Respiration');
+    const [isRecording, setIsRecording] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [knowledgeText, setKnowledgeText] = useState("The mitochondria...");
+
     const [previewModalOpen, setPreviewModalOpen] = useState(false);
-    const [selectedTemplate, setSelectedTemplate] = useState(null);
+    const [selectedTemplate, setSelectedTemplate] = useState(null);    
 
     const templates = [
         { title: "Mitosis Masterclass", features: "Mermaid Flowchart, High Contrast Mode, 12 Q&A Triggers.", scope: "Biology" },
@@ -224,7 +232,6 @@ const Step1Input = ({ onNext }) => {
     
     const commonTopics = ['Science - Basic', 'History - Timelines', 'Math - Diagrams', 'Language - Vocabulary'];
 
-
     const handleTemplateSelect = (title) => {
         setTopicName(title);
     }
@@ -234,6 +241,26 @@ const Step1Input = ({ onNext }) => {
         setPreviewModalOpen(true);
     }
 
+    // Voice recording handler
+    const handleVoiceToggle = () => {
+        if (isRecording) {
+            // Stop recording - this would trigger transcription
+            setIsRecording(false);
+            setIsProcessing(true);
+            
+            // Simulate processing (replace with actual ElevenLabs transcription)
+            setTimeout(() => {
+                setIsProcessing(false);
+                // Transcribed text would be appended here
+                setKnowledgeText(prev => prev + "\n\n[Transcribed voice note would appear here]");
+            }, 2000);
+        } else {
+            setIsRecording(true);
+        }
+    };
+
+    // Determine voice button state
+    const voiceState = isProcessing ? "processing" : isRecording ? "recording" : "idle";
 
     return (
         <div className="max-w-6xl mx-auto bg-white rounded-xl shadow-lg border border-gray-100 p-10 animate-fade-in-up">
@@ -278,7 +305,7 @@ const Step1Input = ({ onNext }) => {
                 />
             </div>
 
-            {/* 模板展示区域 (新的大区块) */}
+            {/* 模板展示区域 */}
             <div className="mb-10 pt-6 border-t border-gray-100">
                 <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
                     <Layout className="w-5 h-5 mr-2 text-blue-600" />
@@ -296,13 +323,12 @@ const Step1Input = ({ onNext }) => {
                     ))}
                 </div>
 
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     {templates.map((template, index) => (
                         <TemplateCard
                             key={index}
                             {...template}
-                            templateData={template} // 传递整个对象用于预览
+                            templateData={template}
                             onSelect={handleTemplateSelect}
                             onPreview={handlePreview}
                         />
@@ -310,33 +336,70 @@ const Step1Input = ({ onNext }) => {
                 </div>
             </div>
 
-            {/* 核心输入区域 */}
+            {/* 核心输入区域 - WITH VOICE FEATURE */}
             <div className="mb-10">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Knowledge Requirements (Natural Language) <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                        Knowledge Requirements (Natural Language) <span className="text-red-500">*</span>
+                    </label>
+                    {/* Voice Button - Top Right of Label */}
+                    <VoiceButton 
+                        state={voiceState}
+                        onPress={handleVoiceToggle}
+                        disabled={isProcessing}
+                        trailing="Dictate Notes"
+                    />
+                </div>
+                
                 <div className="relative">
                     <textarea
                         rows={10}
+                        value={knowledgeText}
+                        onChange={(e) => setKnowledgeText(e.target.value)}
                         className="w-full p-4 border border-gray-300 rounded-lg bg-gray-50 text-gray-800 focus:ring-2 focus:ring-blue-500 outline-none resize-none leading-relaxed transition-all"
                         placeholder="Paste your lecture notes, textbook content, or rough ideas here. The AI will structure this for you..."
-                        defaultValue="The mitochondria is the powerhouse of the cell. Key concepts include Glycolysis, the Krebs cycle, and the Electron Transport Chain. I want students to understand how ATP is generated. Please emphasize the difference between aerobic and anaerobic respiration."
                     />
-                    <div className="absolute bottom-3 right-4 text-xs text-gray-400">Natural Language Processing Enabled</div>
+                    <div className="absolute bottom-3 right-4 text-xs text-gray-400">
+                        {isRecording ? "🎙️ Recording..." : isProcessing ? "⏳ Transcribing..." : "Natural Language Processing Enabled"}
+                    </div>
                 </div>
-                <p className="mt-2 text-xs text-gray-500">Tip: You can paste messy notes; our agent will organize them.</p>
+                
+                {/* Live Waveform - Shows when recording */}
+                {(isRecording || isProcessing) && (
+                    <div className="mt-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="flex items-center gap-4">
+                            <div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-blue-500'}`} />
+                            <LiveWaveform 
+                                active={isRecording} 
+                                processing={isProcessing}
+                                className="flex-1 h-10" 
+                                barColor={isRecording ? "#ef4444" : "#3b82f6"}
+                            />
+                            <span className="text-sm text-gray-600">
+                                {isRecording ? "Speak now..." : "Processing audio..."}
+                            </span>
+                        </div>
+                    </div>
+                )}
+                
+                <p className="mt-2 text-xs text-gray-500">
+                    Tip: You can paste messy notes or use the voice button to dictate; our agent will organize them.
+                </p>
             </div>
 
-            {/* 底部按钮栏 - 生成 */}
+            {/* 底部按钮栏 */}
             <div className="flex justify-end pt-8 border-t border-gray-100">
                 <div className="flex space-x-4">
-                    <button className="px-6 py-3 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors shadow-sm">Save Draft</button>
+                    <button className="px-6 py-3 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors shadow-sm">
+                        Save Draft
+                    </button>
                     <button onClick={onNext} className="px-6 py-3 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-md transition-all flex items-center">
                         Generate Outline
                         <ArrowLeft className="w-4 h-4 ml-2 rotate-180" />
                     </button>
                 </div>
             </div>
+            
             {previewModalOpen && selectedTemplate && (
                 <TemplatePreviewModal 
                     onClose={() => setPreviewModalOpen(false)} 
@@ -471,8 +534,7 @@ const Step2Outline = ({ onNext, onBack }) => {
                                         </span>
                                     </div>
                                 </div>
-                                <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                    <button className="p-1 text-gray-500 hover:text-blue-600 transition-colors" title="Edit"><Edit3 size={16} /></button>
+                                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                     <button onClick={() => handleDelete(item.id)} className="p-1 text-gray-500 hover:text-red-600 transition-colors" title="Delete"><Trash2 size={16} /></button>
                                 </div>
                             </div>
@@ -508,16 +570,95 @@ const SlideNavCard = ({ title, concept, active, onClick }) => (
 
 const Step3Slides = ({ onNext, onBack }) => {
     const initialSlides = [
-        { id: 1, title: 'Slide 1: Overview of Respiration', concept: 'Respiration basics & importance' },
-        { id: 2, title: 'Slide 2: Glycolysis Mechanics', concept: 'Glucose breakdown in cytoplasm' },
-        { id: 3, title: 'Slide 3: Krebs Cycle (Matrix)', concept: 'ATP, NADH, FADH2 production' },
-        { id: 4, title: 'Slide 4: ETC & Chemiosmosis', concept: 'Oxygen\'s role and ATP synthase' },
-        { id: 5, title: 'Slide 5: Aerobic vs. Anaerobic', concept: 'Key differences & applications' },
-        { id: 6, title: 'Slide 6: Summary & Quiz', concept: 'Recap and knowledge check' },
+        { id: 1, title: '1: Overview of Respiration', concept: 'Respiration basics & importance' },
+        { id: 2, title: '2: Glycolysis Mechanics', concept: 'Glucose breakdown in cytoplasm' },
+        { id: 3, title: '3: Krebs Cycle (Matrix)', concept: 'ATP, NADH, FADH2 production' },
+        { id: 4, title: '4: ETC & Chemiosmosis', concept: 'Oxygen\'s role and ATP synthase' },
+        { id: 5, title: '5: Aerobic vs. Anaerobic', concept: 'Key differences & applications' },
+        { id: 6, title: '6: Summary & Quiz', concept: 'Recap and knowledge check' },
     ];
     const [slides, setSlides] = useState(initialSlides);
     const [activeSlideId, setActiveSlideId] = useState(2);
     const [bullets, setBullets] = useState(['Occurs in Cytoplasm', 'Anaerobic Process', 'Net 2 ATP produced']);
+
+    const [isRecording, setIsRecording] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [scriptText, setScriptText] = useState("Glycolysis is the metabolic pathway that converts glucose into pyruvate. This process occurs in the cytoplasm and results in a net gain of two ATP molecules. It is an anaerobic process, meaning it does not require oxygen.");
+
+    const handleVoiceToggle = () => {
+        if (isRecording) {
+            setIsRecording(false);
+            setIsProcessing(true);
+            setTimeout(() => {
+                setIsProcessing(false);
+                setScriptText(prev => prev + "\n\n[Transcribed voice note]");
+            }, 2000);
+        } else {
+            setIsRecording(true);
+        }
+    };
+    
+    const voiceState = isProcessing ? "processing" : isRecording ? "recording" : "idle";
+    const handleAddSlide = () => {
+        const newId = Date.now();
+        const newSlideNumber = slides.length + 1;
+        setSlides([...slides, { 
+            id: newId, 
+            title: `${newSlideNumber}: New Slide`, 
+            concept: 'Click to edit concept' 
+        }]);
+        setActiveSlideId(newId); // 自动切换到新幻灯片
+    };
+    
+    const handleDeleteSlide = (id) => {
+        if (slides.length <= 1) return; // 至少保留一张
+        const newSlides = slides.filter(s => s.id !== id);
+        setSlides(newSlides);
+        // 如果删除的是当前选中的，切换到第一张
+        if (activeSlideId === id) {
+            setActiveSlideId(newSlides[0].id);
+        }
+    };
+    const handleEditSlide = (id, newTitle, newConcept) => {
+        setSlides(slides.map(s => 
+            s.id === id ? { ...s, title: newTitle, concept: newConcept } : s
+        ));
+    };
+    const handleDragStartSlide = (e, id) => {
+        e.dataTransfer.setData("slideId", id);
+    };
+    
+    const handleDragOverSlide = (e) => {
+        e.preventDefault();
+    };
+    
+    const handleDropSlide = (e, targetId) => {
+        const draggedId = parseInt(e.dataTransfer.getData("slideId"));
+        if (draggedId === targetId) return;
+        
+        const draggedSlide = slides.find(s => s.id === draggedId);
+        const newSlides = slides.filter(s => s.id !== draggedId);
+        const targetIndex = newSlides.findIndex(s => s.id === targetId);
+        newSlides.splice(targetIndex, 0, draggedSlide);
+        setSlides(newSlides);
+    };
+    const handleDragStartBullet = (e, index) => {
+        e.dataTransfer.setData("bulletIndex", index);
+    };
+    
+    const handleDragOverBullet = (e) => {
+        e.preventDefault();
+    };
+    
+    const handleDropBullet = (e, targetIndex) => {
+        const draggedIndex = parseInt(e.dataTransfer.getData("bulletIndex"));
+        if (draggedIndex === targetIndex) return;
+        
+        const newBullets = [...bullets];
+        const [draggedItem] = newBullets.splice(draggedIndex, 1);
+        newBullets.splice(targetIndex, 0, draggedItem);
+        setBullets(newBullets);
+    };
 
     const handleAddBullet = () => setBullets([...bullets, 'New Bullet Point']);
     const handleBulletChange = (index, value) => {
@@ -533,16 +674,50 @@ const Step3Slides = ({ onNext, onBack }) => {
         <div className="max-w-[95%] mx-auto flex gap-8 h-[calc(100vh-140px)] animate-fade-in-up">
             {/* Sidebar: Slide List */}
             <div className="w-72 bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col overflow-hidden">
-                <div className="p-5 border-b border-gray-100 font-bold text-gray-800 text-lg">Slides Overview</div>
+                <div className="p-5 border-b border-gray-100 flex justify-between items-center">
+                    <span className="font-bold text-gray-800 text-lg">Slides Overview</span>
+                    <button 
+                        onClick={handleAddSlide}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Add New Slide"
+                    >
+                        <Plus size={18} />
+                    </button>
+                </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
                     {slides.map((s) => (
-                        <SlideNavCard
-                            key={s.id}
-                            title={s.title}
-                            concept={s.concept}
-                            active={s.id === activeSlideId}
-                            onClick={() => setActiveSlideId(s.id)}
-                        />
+                        <div 
+                            key={s.id} 
+                            className="relative group"
+                            draggable
+                            onDragStart={(e) => handleDragStartSlide(e, s.id)}
+                            onDragOver={handleDragOverSlide}
+                            onDrop={(e) => handleDropSlide(e, s.id)}
+                        >
+                            <div
+                                onClick={() => setActiveSlideId(s.id)}
+                                className={`p-4 rounded-lg border cursor-pointer flex items-center gap-3 transition-all duration-200
+                                ${s.id === activeSlideId ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-300 shadow-md' : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'}`}
+                            >
+                                <GripVertical className="w-4 h-4 text-gray-300 cursor-grab hover:text-gray-500 flex-shrink-0" />
+                                <div className="w-8 h-6 bg-gray-100 rounded flex-shrink-0 flex items-center justify-center">
+                                    <ImageIcon size={14} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-semibold text-gray-900 truncate">{s.title}</div>
+                                    <div className="text-xs text-gray-600 truncate">{s.concept}</div>
+                                </div>
+                            </div>
+                            {slides.length > 1 && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleDeleteSlide(s.id); }}
+                                    className="absolute top-2 right-2 p-1 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"
+                                    title="Delete Slide"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            )}
+                        </div>
                     ))}
                 </div>
             </div>
@@ -551,11 +726,30 @@ const Step3Slides = ({ onNext, onBack }) => {
             <div className="flex-1 bg-white rounded-xl shadow-lg border border-gray-100 flex flex-col overflow-hidden">
                 {/* Header */}
                 <div className="px-8 py-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                    <div>
-                        <h2 className="text-xl font-bold text-gray-900">
-                            {slides.find(s => s.id === activeSlideId)?.title || 'Edit Slide'}
-                        </h2>
-                        <p className="text-sm text-gray-500 mt-1">Visual Type: Interactive Flowchart (Mermaid)</p>
+                    <div className="flex-1 mr-4">
+                        <input
+                            type="text"
+                            value={slides.find(s => s.id === activeSlideId)?.title || ''}
+                            onChange={(e) => {
+                                const currentSlide = slides.find(s => s.id === activeSlideId);
+                                if (currentSlide) {
+                                    handleEditSlide(activeSlideId, e.target.value, currentSlide.concept);
+                                }
+                            }}
+                            className="text-xl font-bold text-gray-900 bg-transparent border-b-2 border-transparent hover:border-gray-300 focus:border-blue-500 outline-none w-full transition-colors"
+                        />
+                        <input
+                            type="text"
+                            value={slides.find(s => s.id === activeSlideId)?.concept || ''}
+                            onChange={(e) => {
+                                const currentSlide = slides.find(s => s.id === activeSlideId);
+                                if (currentSlide) {
+                                    handleEditSlide(activeSlideId, currentSlide.title, e.target.value);
+                                }
+                            }}
+                            placeholder="Enter slide concept..."
+                            className="text-sm text-gray-500 mt-1 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 outline-none w-full transition-colors"
+                        />
                     </div>
                     <div className="flex space-x-3">
                         <button className="px-4 py-2 text-sm font-medium bg-white border border-gray-300 rounded-lg shadow-sm text-gray-700 hover:bg-gray-100 transition-colors">Preview View</button>
@@ -570,9 +764,16 @@ const Step3Slides = ({ onNext, onBack }) => {
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Key Bullet Points</label>
                             <div className="space-y-3">
-                                {bullets.map((bullet, index) => (
-                                    <div key={index} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg border border-gray-200">
-                                        <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></div>
+                            {bullets.map((bullet, index) => (
+                                <div 
+                                    key={index} 
+                                    className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg border border-gray-200 cursor-move hover:shadow-sm transition-shadow"
+                                    draggable
+                                    onDragStart={(e) => handleDragStartBullet(e, index)}
+                                    onDragOver={handleDragOverBullet}
+                                    onDrop={(e) => handleDropBullet(e, index)}
+                                >
+                                    <GripVertical className="w-4 h-4 text-gray-300 cursor-grab hover:text-gray-500 flex-shrink-0" />
                                         <input
                                             type="text"
                                             className="flex-1 bg-transparent text-sm text-gray-700 outline-none focus:border-blue-500"
@@ -589,26 +790,42 @@ const Step3Slides = ({ onNext, onBack }) => {
                         </div>
 
                         {/* 2. Teacher Script */}
+                        
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Teacher Script / Content</label>
-                            <textarea
-                                rows={8}
-                                className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-800 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                                placeholder="Edit the detailed script for this slide. The AI will use this for text-to-speech generation."
-                                defaultValue="Glycolysis is the metabolic pathway that converts glucose into pyruvate. This process occurs in the cytoplasm and results in a net gain of two ATP molecules. It is an anaerobic process, meaning it does not require oxygen."
-                            />
-                            <div className="flex justify-end space-x-2 mt-2">
-                                <button className="flex items-center text-xs text-gray-600 hover:text-blue-600 transition-colors">
-                                    <Mic size={14} className="mr-1" />
-                                    Record Voiceover
-                                </button>
-                                <button className="flex items-center text-xs text-gray-600 hover:text-blue-600 transition-colors">
-                                    <Speaker size={14} className="mr-1" />
-                                    Generate AI Voice
-                                </button>
+                            <div className="flex items-center justify-between mb-3">
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Teacher Script / Content</label>
+                                <VoiceButton 
+                                    state={voiceState}
+                                    onPress={handleVoiceToggle}
+                                    disabled={isProcessing}
+                                    trailing="Dictate"
+                                />
+                            </div>
+                            <div className="relative">
+                                <textarea
+                                    rows={8}
+                                    value={scriptText}
+                                    onChange={(e) => setScriptText(e.target.value)}
+                                    className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-800 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                                    placeholder="Edit the detailed script for this slide..."
+                                />
+                                <div className="absolute bottom-2 right-3 text-xs text-gray-400">
+                                    {isRecording ? "🎙️ Recording..." : isProcessing ? "⏳ Transcribing..." : ""}
+                                </div>
+                            </div>
+                            {(isRecording || isProcessing) && (
+                                <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-blue-500'}`} />
+                                        <LiveWaveform active={isRecording} className="flex-1 h-8" barColor={isRecording ? "#ef4444" : "#3b82f6"} />
+                                        <span className="text-xs text-gray-600">{isRecording ? "Speak..." : "Processing..."}</span>
+                                    </div>
+                                </div>
+                            )}
+                            
                             </div>
                         </div>
-                    </div>
+                    
 
                     {/* Right: Visual Preview */}
                     <div className="relative border border-gray-300 rounded-xl overflow-hidden shadow-xl bg-white flex flex-col">
@@ -649,7 +866,10 @@ const Step3Slides = ({ onNext, onBack }) => {
                     
                     <div className="flex space-x-4">
                         {/* Add New Slide Button */}
-                        <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors shadow-sm whitespace-nowrap">
+                        <button 
+                            onClick={handleAddSlide}
+                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors shadow-sm whitespace-nowrap"
+                        >
                             Add New Slide
                         </button>
                         
@@ -668,13 +888,119 @@ const Step3Slides = ({ onNext, onBack }) => {
     );
 };
 
-// --- Step 4: 最终回顾与导出 (ElevenLabs 风格) ---
+// --- Q&A Agent Modal 组件 ---
+const QAAgentModal = ({ onClose }) => {
+    const [messages, setMessages] = useState([
+        { role: 'assistant', content: "Hi! I'm your Q&A Agent for the Cellular Respiration module. Ask me anything about Glycolysis, Krebs Cycle, or the Electron Transport Chain!" }
+    ]);
+    const [inputText, setInputText] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSend = () => {
+        if (!inputText.trim()) return;
+        
+        // Add user message
+        setMessages(prev => [...prev, { role: 'user', content: inputText }]);
+        setInputText('');
+        setIsLoading(true);
+
+        // Simulate AI response
+        setTimeout(() => {
+            setMessages(prev => [...prev, { 
+                role: 'assistant', 
+                content: "Great question! In cellular respiration, ATP is produced through three main stages: Glycolysis (2 ATP), the Krebs Cycle (2 ATP), and the Electron Transport Chain (34 ATP). The ETC produces the most ATP by using the electrons from NADH and FADH2." 
+            }]);
+            setIsLoading(false);
+        }, 1500);
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl h-[600px] flex flex-col overflow-hidden">
+                {/* Header */}
+                <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-orange-50 to-amber-50">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
+                            <MessageCircle size={20} className="text-white" />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-900">Q&A Agent</h2>
+                            <p className="text-xs text-gray-500">Cellular Respiration Module</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100">
+                        <Plus size={20} className="rotate-45" />
+                    </button>
+                </div>
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                    {messages.map((msg, index) => (
+                        <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[80%] p-3 rounded-xl ${
+                                msg.role === 'user' 
+                                    ? 'bg-blue-600 text-white rounded-br-sm' 
+                                    : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm'
+                            }`}>
+                                <p className="text-sm">{msg.content}</p>
+                            </div>
+                        </div>
+                    ))}
+                    {isLoading && (
+                        <div className="flex justify-start">
+                            <div className="bg-white border border-gray-200 p-3 rounded-xl rounded-bl-sm shadow-sm">
+                                <div className="flex gap-1">
+                                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Input */}
+                <div className="p-4 border-t border-gray-100 bg-white">
+                    <div className="flex gap-3">
+                        <input
+                            type="text"
+                            value={inputText}
+                            onChange={(e) => setInputText(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            placeholder="Ask a question about the lesson..."
+                            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                        />
+                        <button 
+                            onClick={handleSend}
+                            disabled={!inputText.trim() || isLoading}
+                            className="px-4 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <Send size={18} />
+                        </button>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2 text-center">Press Enter to send • Powered by ElevenLabs</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- Step 4: 最终回顾与导出 ---
 const Step4Review = ({ onBack }) => {
+    const [qaModalOpen, setQaModalOpen] = useState(false);
+
     const outputs = [
-        { icon: Download, title: "Export PowerPoint/PDF", details: "Download the complete deck optimized for accessibility.", color: "text-blue-600" },
-        { icon: Share2, title: "Share Learning Link", details: "Generate a student-facing link for the interactive module.", color: "text-green-600" },
-        { icon: List, title: "View Agent Transcript", details: "Review the full generated teaching script for all slides.", color: "text-purple-600" },
-        { icon: MessageCircle, title: "Launch Q&A Agent", details: "Activate the AI Q&A bot for pre-review testing.", color: "text-orange-600" },
+        { icon: Download, title: "Export PowerPoint/PDF", details: "Download the complete deck optimized for accessibility.", color: "text-blue-600", action: () => alert('Export feature coming soon!') },
+        { icon: Share2, title: "Share Learning Link", details: "Generate a student-facing link for the interactive module.", color: "text-green-600", action: () => alert('Share link copied!') },
+        { icon: List, title: "View Agent Transcript", details: "Review the full generated teaching script for all slides.", color: "text-purple-600", action: () => alert('Opening transcript...') },
+        { icon: MessageCircle, title: "Launch Q&A Agent", details: "Activate the AI Q&A bot for pre-review testing.", color: "text-orange-600", action: () => setQaModalOpen(true) },
     ];
 
     return (
@@ -728,6 +1054,7 @@ const Step4Review = ({ onBack }) => {
                 {outputs.map((item, index) => (
                     <button
                         key={index}
+                        onClick={item.action}
                         className="p-6 bg-gray-50 rounded-xl border border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-all text-left flex flex-col justify-start items-start"
                     >
                         <item.icon size={24} className={`${item.color} mb-3`} />
@@ -743,6 +1070,9 @@ const Step4Review = ({ onBack }) => {
                     Go Back to Editor
                 </button>
             </div>
+
+            {/* Q&A Agent Modal */}
+            {qaModalOpen && <QAAgentModal onClose={() => setQaModalOpen(false)} />}
         </div>
     );
 };

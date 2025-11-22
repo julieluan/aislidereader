@@ -1,3 +1,20 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 修复圆角问题 */
+input, textarea, select, button {
+    border-radius: 0.5rem; /* 相当于 rounded-lg */
+  }
+  
+  .rounded-lg {
+    border-radius: 0.5rem !important;
+  }
+  
+  .rounded-xl {
+    border-radius: 0.75rem !important;
+  }
+  
+  .rounded-full {
+    border-radius: 9999px !important;
+  }
