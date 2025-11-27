@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, Layout, FileText, CheckCircle, Plus, Users, MessageSquare, PlayCircle, MessageCircle, Clock, BookOpen, TrendingUp, Award, Star, Link, Globe, Trash2, Trophy, Target, Flame, Medal, ArrowLeft } from 'lucide-react';
+import { ConversationBar } from '@/components/ui/conversation-bar';
 
 const StudentApp = () => {
   const [activeTab, setActiveTab] = useState('home');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentSlide, setCurrentSlide] = useState(0);
   const [selectedModule, setSelectedModule] = useState(null);
+  const [isLearning, setIsLearning] = useState(false);
   const [myCourses, setMyCourses] = useState([1, 2]);
   const [extensionLinks, setExtensionLinks] = useState([
     { id: 1, url: 'https://arxiv.org/paper/123', title: 'ML Research Paper' },
@@ -58,6 +60,117 @@ const StudentApp = () => {
   const addLink = () => { if (newLink.trim()) { setExtensionLinks([...extensionLinks, { id: Date.now(), url: newLink, title: newLink.substring(0, 30) + '...' }]); setNewLink(''); } };
   const removeLink = (id) => setExtensionLinks(extensionLinks.filter(l => l.id !== id));
 
+  // Agent Chat View Component
+  const AgentChatView = ({ module, onExit }) => {
+    const [messages, setMessages] = useState([
+      {
+        source: 'ai',
+        message: `Hi! I'm your AI tutor for "${module.title}". I'm here to help you learn about ${module.subject}. Feel free to ask me any questions!`,
+        timestamp: new Date()
+      }
+    ]);
+    const [agentConnected, setAgentConnected] = useState(false);
+    const AGENT_ID = "agent_1301kayr8fdneh8agzn2vx0hfra0";
+
+    const handleMessage = (msg) => {
+      setMessages(prev => [...prev, {
+        source: msg.source,
+        message: msg.message,
+        timestamp: new Date()
+      }]);
+    };
+
+    return (
+      <div className="h-screen flex flex-col bg-white">
+        <style>{styles}</style>
+
+        {/* Header */}
+        <header className="h-16 border-b border-gray-200 flex items-center justify-between px-6 bg-white shadow-sm">
+          <button
+            onClick={onExit}
+            className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-all duration-300"
+          >
+            <ArrowLeft size={20} />
+            <span className="font-medium">Back to Courses</span>
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="text-center">
+              <h2 className="text-lg font-bold text-gray-900">{module.title}</h2>
+              <p className="text-xs text-gray-500">{module.subject} - {module.instructor}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${agentConnected ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+            <span className="text-sm text-gray-600">
+              {agentConnected ? 'Connected' : 'Disconnected'}
+            </span>
+          </div>
+        </header>
+
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          <div className="max-w-4xl mx-auto space-y-4">
+            {messages.length === 0 && (
+              <div className="text-center text-gray-400 mt-12">
+                <MessageCircle size={48} className="mx-auto mb-4 opacity-50" />
+                <p className="text-lg mb-2">Start learning with your AI tutor!</p>
+                <p className="text-sm">Click the phone icon below to connect and start the conversation.</p>
+              </div>
+            )}
+
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.source === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
+                <div className={`max-w-[70%] rounded-2xl px-4 py-3 ${
+                  msg.source === 'user'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-900 shadow-md border border-gray-200'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    {msg.source === 'ai' && (
+                      <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs flex-shrink-0 mt-1">
+                        AI
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                      <p className={`text-xs mt-1 ${msg.source === 'user' ? 'text-blue-100' : 'text-gray-400'}`}>
+                        {msg.timestamp?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Conversation Bar */}
+        <div className="border-t border-gray-200 bg-white">
+          <ConversationBar
+            agentId={AGENT_ID}
+            onMessage={handleMessage}
+            onConnect={() => {
+              setAgentConnected(true);
+              console.log('✅ Agent connected to:', AGENT_ID);
+            }}
+            onDisconnect={() => {
+              setAgentConnected(false);
+              console.log('❌ Agent disconnected');
+            }}
+            onError={(error) => {
+              console.error('❌ Agent error:', error);
+              setMessages(prev => [...prev, {
+                source: 'ai',
+                message: `Error: ${error.message}. Please try reconnecting.`,
+                timestamp: new Date()
+              }]);
+            }}
+          />
+        </div>
+      </div>
+    );
+  };
+
   const styles = `
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
@@ -66,6 +179,18 @@ const StudentApp = () => {
     .animate-fade-in-up { animation: fadeInUp 0.5s ease-out; }
     .animate-scale-in { animation: scaleIn 0.3s ease-out; }
   `;
+
+  // If in learning mode, show agent chat view
+  if (isLearning && selectedModule) {
+    return (
+      <AgentChatView
+        module={selectedModule}
+        onExit={() => {
+          setIsLearning(false);
+        }}
+      />
+    );
+  }
 
   if (selectedModule) {
     return (
@@ -91,7 +216,7 @@ const StudentApp = () => {
                 <div className="flex items-center gap-1 px-3 py-1 bg-white/10 rounded-full"><Users className="w-4 h-4" /><span>{selectedModule.students.toLocaleString()}</span></div>
                 <div className="flex items-center gap-1 px-3 py-1 bg-white/10 rounded-full"><Clock className="w-4 h-4" /><span>{selectedModule.duration}</span></div>
               </div>
-              <button onClick={() => alert('Starting: ' + selectedModule.title)} className="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg transition-all duration-300">
+              <button onClick={() => setIsLearning(true)} className="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg transition-all duration-300">
                 Start Tutorial
               </button>
             </div>
