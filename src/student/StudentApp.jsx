@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, Layout, FileText, CheckCircle, Plus, Users, MessageSquare, PlayCircle, MessageCircle, Clock, BookOpen, TrendingUp, Award, Star, Link, Globe, Trash2, Trophy, Target, Flame, Medal, ArrowLeft } from 'lucide-react';
+import { ChevronRight, Layout, FileText, CheckCircle, Plus, Users, MessageSquare, PlayCircle, MessageCircle, Clock, BookOpen, TrendingUp, Award, Star, Link, Globe, Trash2, Trophy, Target, Flame, Medal, ArrowLeft, Pause, Play, ThumbsUp, ThumbsDown, Highlighter, StickyNote, Send, Eye, CheckCircle2 } from 'lucide-react';
 import { ConversationBar } from '@/components/ui/conversation-bar';
 
 const StudentApp = () => {
@@ -15,6 +15,25 @@ const StudentApp = () => {
   ]);
   const [newLink, setNewLink] = useState('');
   const [addedAnimation, setAddedAnimation] = useState(null);
+  
+  // Session state management
+  const [sessionState, setSessionState] = useState('active'); // 'active' | 'paused' | 'completed'
+  const [sessionDuration, setSessionDuration] = useState(0); // seconds
+  const [visitedSlides, setVisitedSlides] = useState([0]); // slide indices visited
+  const [completedSlides, setCompletedSlides] = useState([]); // slide indices completed
+  
+  // Interaction states
+  const [highlightMode, setHighlightMode] = useState(false);
+  const [annotationMode, setAnnotationMode] = useState(false);
+  const [annotations, setAnnotations] = useState([]);
+  const [highlights, setHighlights] = useState([]);
+  
+  // Agent state - for Q&A Modal
+  const [qaModalOpen, setQaModalOpen] = useState(false);
+  const [agentMessages, setAgentMessages] = useState([]);
+  const [agentInputText, setAgentInputText] = useState('');
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [agentOnline, setAgentOnline] = useState(false);
 
   const heroSlides = [
     { title: "The World's First Conversational Video Platform", subtitle: "Don't watch videos any more, have a conversation.", bgGradient: "from-blue-600 to-blue-800" },
@@ -26,6 +45,17 @@ const StudentApp = () => {
     const timer = setInterval(() => setCurrentSlide((prev) => (prev + 1) % heroSlides.length), 5000);
     return () => clearInterval(timer);
   }, []);
+
+  // Session timer
+  useEffect(() => {
+    let interval;
+    if (selectedModule && sessionState === 'active') {
+      interval = setInterval(() => {
+        setSessionDuration(prev => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [selectedModule, sessionState]);
 
   const modules = [
     { id: 1, title: 'Cellular Respiration', subject: 'Biology', instructor: 'Dr. Smith', slides: 6, duration: '8:30', students: 1234, rating: 4.8, color: 'from-blue-500 to-blue-600', progress: 75, category: 'Science' },
@@ -56,11 +86,88 @@ const StudentApp = () => {
       setTimeout(() => setAddedAnimation(null), 1000);
     }
   };
-  const removeFromMyCourses = (e, id) => { e.stopPropagation(); setMyCourses(myCourses.filter(c => c !== id)); };
-  const addLink = () => { if (newLink.trim()) { setExtensionLinks([...extensionLinks, { id: Date.now(), url: newLink, title: newLink.substring(0, 30) + '...' }]); setNewLink(''); } };
+  
+  const removeFromMyCourses = (e, id) => { 
+    e.stopPropagation(); 
+    setMyCourses(myCourses.filter(c => c !== id)); 
+  };
+  
+  const addLink = () => { 
+    if (newLink.trim()) { 
+      setExtensionLinks([...extensionLinks, { id: Date.now(), url: newLink, title: newLink.substring(0, 30) + '...' }]); 
+      setNewLink(''); 
+    } 
+  };
+  
   const removeLink = (id) => setExtensionLinks(extensionLinks.filter(l => l.id !== id));
 
-  // Agent Chat View Component
+  // Session control functions
+  const toggleSessionState = () => {
+    setSessionState(prev => prev === 'active' ? 'paused' : 'active');
+  };
+
+  const completeSession = () => {
+    setSessionState('completed');
+    alert(`Session completed! Study time: ${formatDuration(sessionDuration)}`);
+  };
+
+  const markSlideComplete = (slideIndex) => {
+    if (!completedSlides.includes(slideIndex)) {
+      setCompletedSlides([...completedSlides, slideIndex]);
+    }
+  };
+
+  const visitSlide = (slideIndex) => {
+    if (!visitedSlides.includes(slideIndex)) {
+      setVisitedSlides([...visitedSlides, slideIndex]);
+    }
+  };
+
+  const formatDuration = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Interaction functions
+  const addHighlight = (text) => {
+    setHighlights([...highlights, { id: Date.now(), text, timestamp: new Date() }]);
+    setHighlightMode(false);
+  };
+
+  const addAnnotation = (text) => {
+    setAnnotations([...annotations, { id: Date.now(), text, timestamp: new Date() }]);
+    setAnnotationMode(false);
+  };
+
+  // Agent functions for Q&A Modal
+  const sendAgentMessage = () => {
+    if (!agentInputText.trim()) return;
+    
+    const userMessage = { role: 'user', content: agentInputText, timestamp: new Date() };
+    setAgentMessages([...agentMessages, userMessage]);
+    setAgentInputText('');
+    setAgentLoading(true);
+
+    // Simulate agent response
+    setTimeout(() => {
+      const agentResponse = {
+        role: 'assistant',
+        content: "Great question! In cellular respiration, ATP is produced through three main stages: Glycolysis (2 ATP), the Krebs Cycle (2 ATP), and the Electron Transport Chain (34 ATP). The ETC produces the most ATP by using the electrons from NADH and FADH2.",
+        timestamp: new Date(),
+        messageId: Date.now()
+      };
+      setAgentMessages(prev => [...prev, agentResponse]);
+      setAgentLoading(false);
+    }, 1500);
+  };
+
+  const rateAgentResponse = (messageId, helpful) => {
+    console.log(`Rated message ${messageId} as ${helpful ? 'helpful' : 'not helpful'}`);
+    alert(helpful ? '👍 Thanks for your feedback!' : '👎 We\'ll improve our responses');
+  };
+
+  // Agent Chat View Component (with ConversationBar)
   const AgentChatView = ({ module, onExit }) => {
     const [messages, setMessages] = useState([
       {
@@ -84,7 +191,7 @@ const StudentApp = () => {
       <div className="h-screen flex flex-col bg-white">
         <style>{styles}</style>
 
-        {/* Header */}
+        {/* Header with Session Controls */}
         <header className="h-16 border-b border-gray-200 flex items-center justify-between px-6 bg-white shadow-sm">
           <button
             onClick={onExit}
@@ -93,12 +200,43 @@ const StudentApp = () => {
             <ArrowLeft size={20} />
             <span className="font-medium">Back to Courses</span>
           </button>
-          <div className="flex items-center gap-3">
-            <div className="text-center">
-              <h2 className="text-lg font-bold text-gray-900">{module.title}</h2>
-              <p className="text-xs text-gray-500">{module.subject} - {module.instructor}</p>
+          
+          {/* Session Status Bar */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full">
+              <Clock size={16} className="text-blue-600" />
+              <span className="text-sm font-medium text-blue-900">{formatDuration(sessionDuration)}</span>
             </div>
+            
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full">
+              <CheckCircle2 size={16} className="text-green-600" />
+              <span className="text-sm font-medium text-green-900">
+                {completedSlides.length}/{module.slides} Completed
+              </span>
+            </div>
+            
+            <button
+              onClick={toggleSessionState}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                sessionState === 'active'
+                  ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                  : 'bg-green-100 text-green-700 hover:bg-green-200'
+              }`}
+            >
+              {sessionState === 'active' ? (
+                <>
+                  <Pause size={16} />
+                  Pause
+                </>
+              ) : (
+                <>
+                  <Play size={16} />
+                  Resume
+                </>
+              )}
+            </button>
           </div>
+
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${agentConnected ? 'bg-green-500' : 'bg-gray-300'}`}></div>
             <span className="text-sm text-gray-600">
@@ -171,16 +309,127 @@ const StudentApp = () => {
     );
   };
 
+  // Q&A Agent Modal Component (for quick questions without full learning mode)
+  const QAAgentModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl h-[600px] flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+              <MessageCircle size={20} className="text-white" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-gray-900">AI Learning Assistant</h2>
+                {agentOnline ? (
+                  <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    Online
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-xs text-red-600 font-medium">
+                    <div className="w-2 h-2 bg-red-500 rounded-full" />
+                    Offline
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500">{selectedModule?.title}</p>
+            </div>
+          </div>
+          <button onClick={() => setQaModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100">
+            <Plus size={20} className="rotate-45" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+          {agentMessages.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <MessageCircle size={48} className="mx-auto mb-3 text-gray-300" />
+              <p>Ask me anything about this lesson!</p>
+            </div>
+          )}
+          {agentMessages.map((msg, index) => (
+            <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] ${msg.role === 'user' ? '' : 'space-y-2'}`}>
+                <div className={`p-3 rounded-xl ${
+                  msg.role === 'user'
+                    ? 'bg-blue-600 text-white rounded-br-sm'
+                    : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm'
+                }`}>
+                  <p className="text-sm">{msg.content}</p>
+                </div>
+                {msg.role === 'assistant' && msg.messageId && (
+                  <div className="flex items-center gap-2 px-2">
+                    <span className="text-xs text-gray-500">Was this helpful?</span>
+                    <button
+                      onClick={() => rateAgentResponse(msg.messageId, true)}
+                      className="p-1 text-green-600 hover:bg-green-50 rounded transition-colors"
+                      title="Helpful"
+                    >
+                      <ThumbsUp size={14} />
+                    </button>
+                    <button
+                      onClick={() => rateAgentResponse(msg.messageId, false)}
+                      className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="Not helpful"
+                    >
+                      <ThumbsDown size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          {agentLoading && (
+            <div className="flex justify-start">
+              <div className="bg-white border border-gray-200 p-3 rounded-xl rounded-bl-sm shadow-sm">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-gray-100 bg-white">
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={agentInputText}
+              onChange={(e) => setAgentInputText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), sendAgentMessage())}
+              placeholder={agentOnline ? "Ask a question..." : "Agent is offline"}
+              disabled={!agentOnline}
+              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none disabled:opacity-50"
+            />
+            <button
+              onClick={sendAgentMessage}
+              disabled={!agentInputText.trim() || agentLoading || !agentOnline}
+              className="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Send size={18} />
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-2 text-center">Press Enter to send • AI-powered by ElevenLabs</p>
+        </div>
+      </div>
+    </div>
+  );
+
   const styles = `
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes scaleIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .animate-fade-in { animation: fadeIn 0.3s ease-out; }
     .animate-fade-in-up { animation: fadeInUp 0.5s ease-out; }
     .animate-scale-in { animation: scaleIn 0.3s ease-out; }
+    .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
   `;
 
-  // If in learning mode, show agent chat view
+  // If in learning mode, show agent chat view with ConversationBar
   if (isLearning && selectedModule) {
     return (
       <AgentChatView
@@ -192,58 +441,266 @@ const StudentApp = () => {
     );
   }
 
+  // Module detail view (before entering learning mode)
   if (selectedModule) {
+    const progressPercentage = Math.round((completedSlides.length / selectedModule.slides) * 100);
+    
     return (
       <div className="h-screen bg-white flex flex-col overflow-hidden">
         <style>{styles}</style>
-        <header className="h-14 border-b border-gray-200 flex items-center justify-between px-6 bg-white flex-shrink-0">
+        
+        {/* Header with Session Controls */}
+        <header className="h-16 border-b border-gray-200 flex items-center justify-between px-6 bg-white flex-shrink-0">
           <button onClick={() => setSelectedModule(null)} className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-all duration-300">
             <ArrowLeft size={20} />
-            <span className="font-medium">Back</span>
+            <span className="font-medium">Back to Courses</span>
           </button>
+          
+          {/* Session Status Bar */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full">
+              <Clock size={16} className="text-blue-600" />
+              <span className="text-sm font-medium text-blue-900">{formatDuration(sessionDuration)}</span>
+            </div>
+            
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full">
+              <CheckCircle2 size={16} className="text-green-600" />
+              <span className="text-sm font-medium text-green-900">
+                {completedSlides.length}/{selectedModule.slides} Completed
+              </span>
+            </div>
+            
+            <button
+              onClick={toggleSessionState}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                sessionState === 'active'
+                  ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                  : 'bg-green-100 text-green-700 hover:bg-green-200'
+              }`}
+            >
+              {sessionState === 'active' ? (
+                <>
+                  <Pause size={16} />
+                  Pause
+                </>
+              ) : (
+                <>
+                  <Play size={16} />
+                  Resume
+                </>
+              )}
+            </button>
+            
+            {completedSlides.length === selectedModule.slides && (
+              <button
+                onClick={completeSession}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+              >
+                Finish Session
+              </button>
+            )}
+          </div>
+          
           <div className="text-xl font-extrabold text-blue-600">AI LEARNING</div>
         </header>
+
         <div className="flex-1 flex overflow-hidden">
-          <div className="flex-1 bg-gray-900 flex items-center justify-center p-6 overflow-hidden">
+          {/* Main Content Area */}
+          <div className="flex-1 bg-gray-900 flex flex-col items-center justify-center p-6 overflow-hidden relative">
+            {/* Interaction Toolbar */}
+            <div className="absolute top-4 right-4 flex gap-2 z-10">
+              <button
+                onClick={() => setHighlightMode(!highlightMode)}
+                className={`p-2 rounded-lg transition-all ${
+                  highlightMode
+                    ? 'bg-yellow-500 text-white shadow-lg'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+                title="Highlight text"
+              >
+                <Highlighter size={20} />
+              </button>
+              <button
+                onClick={() => setAnnotationMode(!annotationMode)}
+                className={`p-2 rounded-lg transition-all ${
+                  annotationMode
+                    ? 'bg-purple-500 text-white shadow-lg'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+                title="Add annotation"
+              >
+                <StickyNote size={20} />
+              </button>
+              <button
+                onClick={() => setQaModalOpen(true)}
+                className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all relative"
+                title="Ask AI Assistant"
+              >
+                <MessageCircle size={20} />
+                {agentOnline && (
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" />
+                )}
+              </button>
+            </div>
+
             <div className="text-center text-white max-w-xl animate-fade-in-up">
               <div className={`w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br ${selectedModule.color} flex items-center justify-center shadow-2xl`}>
                 <BookOpen size={48} />
               </div>
               <h1 className="text-3xl font-bold mb-2">{selectedModule.title}</h1>
               <p className="text-lg text-gray-300 mb-4">{selectedModule.subject} - {selectedModule.instructor}</p>
-              <div className="flex items-center justify-center gap-4 mb-6 text-sm">
-                <div className="flex items-center gap-1 px-3 py-1 bg-white/10 rounded-full"><Star className="w-4 h-4 text-yellow-400 fill-yellow-400" /><span>{selectedModule.rating}</span></div>
-                <div className="flex items-center gap-1 px-3 py-1 bg-white/10 rounded-full"><Users className="w-4 h-4" /><span>{selectedModule.students.toLocaleString()}</span></div>
-                <div className="flex items-center gap-1 px-3 py-1 bg-white/10 rounded-full"><Clock className="w-4 h-4" /><span>{selectedModule.duration}</span></div>
+              
+              {/* Progress Bar */}
+              <div className="mb-6">
+                <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
+                  <div
+                    className="bg-gradient-to-r from-blue-500 to-green-500 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${progressPercentage}%` }}
+                  />
+                </div>
+                <p className="text-sm text-gray-400">{progressPercentage}% Complete</p>
               </div>
-              <button onClick={() => setIsLearning(true)} className="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg transition-all duration-300">
-                Start Tutorial
+              
+              <div className="flex items-center justify-center gap-4 mb-6 text-sm">
+                {/* 修复：将 'flexitems-center' 改为 'flex items-center' */}
+                <div className="flex items-center gap-1 px-3 py-1 bg-white/10 rounded-full"> 
+                  <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                  <span>{selectedModule.rating}</span>
+                </div>
+                <div className="flex items-center gap-1 px-3 py-1 bg-white/10 rounded-full">
+                  <Users className="w-4 h-4" />
+                  <span>{selectedModule.students.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center gap-1 px-3 py-1 bg-white/10 rounded-full">
+                  <Eye className="w-4 h-4" />
+                  <span>{visitedSlides.length}/{selectedModule.slides} Visited</span>
+                </div>
+              </div>
+              
+              {highlightMode && (
+                <div className="mb-4 p-3 bg-yellow-500 text-gray-900 rounded-lg animate-pulse">
+                  📝 Highlight mode active - Select text to highlight
+                </div>
+              )}
+              
+              {annotationMode && (
+                <div className="mb-4 p-3 bg-purple-500 text-white rounded-lg animate-pulse">
+                  ✏️ Annotation mode active - Click to add notes
+                </div>
+              )}
+              
+              <button
+                onClick={() => {
+                  visitSlide(0);
+                  setIsLearning(true);
+                }}
+                className="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg transition-all duration-300"
+              >
+                {selectedModule.progress > 0 ? 'Continue Learning' : 'Start Tutorial'}
               </button>
             </div>
           </div>
+
+          {/* Sidebar - Course Content */}
           <div className="w-80 bg-white border-l border-gray-200 flex flex-col overflow-hidden flex-shrink-0">
-            <div className="p-4 border-b border-gray-200 flex-shrink-0 bg-gray-50"><h2 className="text-lg font-bold text-gray-900">Course Content</h2></div>
+            <div className="p-4 border-b border-gray-200 flex-shrink-0 bg-gray-50">
+              <h2 className="text-lg font-bold text-gray-900">Course Content</h2>
+              <p className="text-xs text-gray-500 mt-1">
+                {visitedSlides.length} visited • {completedSlides.length} completed
+              </p>
+            </div>
+            
             <div className="flex-1 overflow-y-auto p-4">
               <div className="space-y-2">
-                {Array.from({ length: selectedModule.slides }).map((_, i) => (
-                  <div key={i} className="p-3 border border-gray-200 rounded-lg hover:border-blue-500 cursor-pointer hover:shadow-md hover:bg-blue-50 transition-all duration-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center"><PlayCircle size={14} className="text-gray-600" /></div>
-                        <div><p className="font-medium text-gray-900 text-sm">Slide {i + 1}</p><p className="text-xs text-gray-500">~2 min</p></div>
+                {Array.from({ length: selectedModule.slides }).map((_, i) => {
+                  const isVisited = visitedSlides.includes(i);
+                  const isCompleted = completedSlides.includes(i);
+                  
+                  return (
+                    <div
+                      key={i}
+                      onClick={() => visitSlide(i)}
+                      className={`p-3 border rounded-lg cursor-pointer transition-all duration-200 ${
+                        isCompleted
+                          ? 'border-green-500 bg-green-50'
+                          : isVisited
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                            isCompleted
+                              ? 'bg-green-500'
+                              : isVisited
+                              ? 'bg-blue-500'
+                              : 'bg-gray-100'
+                          }`}>
+                            {isCompleted ? (
+                              <CheckCircle size={14} className="text-white" />
+                            ) : (
+                              <PlayCircle size={14} className={isVisited ? 'text-white' : 'text-gray-600'} />
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900 text-sm">Slide {i + 1}</p>
+                            <p className="text-xs text-gray-500">~2 min</p>
+                          </div>
+                        </div>
+                        {!isCompleted && isVisited && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              markSlideComplete(i);
+                            }}
+                            className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                          >
+                            Mark Done
+                          </button>
+                        )}
                       </div>
-                      {selectedModule.progress > (i * 100 / selectedModule.slides) && <CheckCircle size={16} className="text-green-600" />}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
+            
+            {/* Annotations & Highlights Panel */}
+            {(highlights.length > 0 || annotations.length > 0) && (
+              <div className="border-t border-gray-200 p-4 bg-gray-50 max-h-48 overflow-y-auto">
+                <h3 className="text-sm font-bold text-gray-900 mb-2">My Notes</h3>
+                {highlights.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-xs text-gray-500 mb-1">Highlights ({highlights.length})</p>
+                    {highlights.slice(0, 2).map(h => (
+                      <div key={h.id} className="text-xs bg-yellow-50 border border-yellow-200 rounded p-2 mb-1">
+                        {h.text}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {annotations.length > 0 && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Annotations ({annotations.length})</p>
+                    {annotations.slice(0, 2).map(a => (
+                      <div key={a.id} className="text-xs bg-purple-50 border border-purple-200 rounded p-2 mb-1">
+                        {a.text}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
+        
+        {qaModalOpen && <QAAgentModal />}
       </div>
     );
   }
-
+  
+  // Home/Course listing view
   const renderContent = () => {
     if (activeTab === 'courses') {
       const myModules = modules.filter(m => myCourses.includes(m.id));
@@ -254,7 +711,7 @@ const StudentApp = () => {
             <div className="grid grid-cols-4 gap-5">
               {myModules.map((module) => (
                 <div key={module.id} onClick={() => setSelectedModule(module)} className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-xl cursor-pointer group border border-gray-200 transition-all duration-300">
-                  <div className={`h-32 bg-gradient-to-br ${module.color} relative`}>
+                  <div className={`h-32 bg-gradient-to-br ${module.color} relative`}> {/* 修复模板字符串引号 */}
                     <div className="absolute inset-0 flex items-center justify-center"><h3 className="text-xl font-bold text-white">{module.subject}</h3></div>
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
                       <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-xl"><PlayCircle size={24} className="text-gray-900" /></div>
@@ -275,6 +732,7 @@ const StudentApp = () => {
         </div>
       );
     }
+    
     if (activeTab === 'progress') {
       return (
         <div className="p-6 bg-gray-100 overflow-y-auto h-full animate-fade-in">
@@ -297,6 +755,7 @@ const StudentApp = () => {
         </div>
       );
     }
+
     if (activeTab === 'achievements') {
       return (
         <div className="p-6 bg-gray-100 overflow-y-auto h-full animate-fade-in">
@@ -316,6 +775,7 @@ const StudentApp = () => {
         </div>
       );
     }
+
     if (activeTab === 'extension') {
       return (
         <div className="p-6 bg-gray-100 overflow-y-auto h-full animate-fade-in">
@@ -345,6 +805,7 @@ const StudentApp = () => {
         </div>
       );
     }
+
     return (
       <>
         <div className="relative h-52 overflow-hidden flex-shrink-0">
@@ -411,6 +872,7 @@ const StudentApp = () => {
     );
   };
 
+  // Main JSX return for StudentApp
   return (
     <div className="h-screen bg-white flex overflow-hidden">
       <style>{styles}</style>
@@ -420,7 +882,7 @@ const StudentApp = () => {
         </div>
         <nav className="flex-1 flex flex-col items-center space-y-3 mt-4">
           {[{ icon: Layout, label: 'Home', id: 'home' }, { icon: BookOpen, label: 'Courses', id: 'courses' }, { icon: TrendingUp, label: 'Progress', id: 'progress' }, { icon: Award, label: 'Achieve', id: 'achievements' }, { icon: Link, label: 'Extension', id: 'extension' }].map((item) => (
-            <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex flex-col items-center p-2 rounded-lg transition-all duration-300 ${activeTab === item.id ? 'text-blue-600 bg-blue-50 shadow-md' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}>
+            <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex flex-col items-center p-2 rounded-lg transition-all duration-300 ${activeTab === item.id ? 'text-blue-600 bg-blue-50 shadow-md' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}> {/* 修复模板字符串引号 */}
               <item.icon size={18} /><span className="text-xs mt-1 font-medium">{item.label}</span>
             </button>
           ))}
@@ -443,4 +905,4 @@ const StudentApp = () => {
   );
 };
 
-export default StudentApp;
+export default StudentApp; // <--- 顶层导出
