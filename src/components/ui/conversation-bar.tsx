@@ -59,6 +59,11 @@ export interface ConversationBarProps {
    * Callback when user sends a message
    */
   onSendMessage?: (message: string) => void
+
+  /**
+   * Ref to expose endSession function for external cleanup
+   */
+  endSessionRef?: React.MutableRefObject<(() => Promise<void>) | null>
 }
 
 export const ConversationBar = React.forwardRef<
@@ -75,6 +80,7 @@ export const ConversationBar = React.forwardRef<
       onError,
       onMessage,
       onSendMessage,
+      endSessionRef,
     },
     ref
   ) => {
@@ -85,9 +91,12 @@ export const ConversationBar = React.forwardRef<
     const [keyboardOpen, setKeyboardOpen] = React.useState(false)
     const [textInput, setTextInput] = React.useState("")
     const mediaStreamRef = React.useRef<MediaStream | null>(null)
+    const conversationRef = React.useRef<any>(null)
 
     const conversation = useConversation({
       onConnect: () => {
+        console.log('✅ Conversation connected - setting state to connected')
+        setAgentState("connected")
         onConnect?.()
       },
       onDisconnect: () => {
@@ -112,6 +121,11 @@ export const ConversationBar = React.forwardRef<
       },
     })
 
+    // Store conversation in ref for cleanup
+    React.useEffect(() => {
+      conversationRef.current = conversation
+    }, [conversation])
+
     const getMicStream = React.useCallback(async () => {
       if (mediaStreamRef.current) return mediaStreamRef.current
 
@@ -123,6 +137,7 @@ export const ConversationBar = React.forwardRef<
 
     const startConversation = React.useCallback(async () => {
       try {
+        console.log('🎙️ Starting conversation, setting state to connecting')
         setAgentState("connecting")
 
         await getMicStream()
@@ -130,8 +145,9 @@ export const ConversationBar = React.forwardRef<
         await conversation.startSession({
           agentId,
           connectionType: "webrtc",
-          onStatusChange: (status) => setAgentState(status.status),
         })
+        // Note: State will be set to "connected" by the onConnect callback
+        console.log('📞 Session started, waiting for onConnect callback')
       } catch (error) {
         console.error("Error starting conversation:", error)
         setAgentState("disconnected")
@@ -139,15 +155,44 @@ export const ConversationBar = React.forwardRef<
       }
     }, [conversation, getMicStream, agentId, onError])
 
-    const handleEndSession = React.useCallback(() => {
-      conversation.endSession()
-      setAgentState("disconnected")
+    const handleEndSession = React.useCallback(async () => {
+      try {
+        setAgentState("disconnecting")
+        
+        // End the conversation on the frontend
+        conversation.endSession()
+        
+        // Notify backend that conversation is ending
+        try {
+          const apiBaseUrl = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
+          await fetch(`${apiBaseUrl}/api/conversations/${agentId}/end`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              sessionId: null // Can be enhanced with actual session tracking
+            })
+          })
+        } catch (backendError) {
+          // Log but don't fail if backend call fails
+          console.warn('Failed to notify backend of conversation end:', backendError)
+        }
 
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((t) => t.stop())
-        mediaStreamRef.current = null
+        // Stop media stream
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((t) => t.stop())
+          mediaStreamRef.current = null
+        }
+
+        setAgentState("disconnected")
+        onDisconnect?.()
+      } catch (error) {
+        console.error('Error ending session:', error)
+        setAgentState("disconnected")
+        onError?.(error as Error)
       }
-    }, [conversation])
+    }, [conversation, agentId, onDisconnect, onError])
 
     const toggleMute = React.useCallback(() => {
       setIsMuted((prev) => !prev)
@@ -171,6 +216,11 @@ export const ConversationBar = React.forwardRef<
     }, [conversation, textInput, onSendMessage])
 
     const isConnected = agentState === "connected"
+    
+    // Debug: Log state changes
+    React.useEffect(() => {
+      console.log('🔄 Agent state:', agentState, 'isConnected:', isConnected)
+    }, [agentState, isConnected])
 
     const handleTextChange = React.useCallback(
       (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -194,13 +244,88 @@ export const ConversationBar = React.forwardRef<
       [handleSendText]
     )
 
+    // Expose endSession function via ref for external cleanup
     React.useEffect(() => {
+      if (endSessionRef) {
+        endSessionRef.current = handleEndSession
+      }
       return () => {
-        if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach((t) => t.stop())
+        if (endSessionRef) {
+          endSessionRef.current = null
         }
       }
-    }, [])
+    }, [endSessionRef, handleEndSession])
+
+    // Cleanup on component unmount ONLY - end conversation if connected
+    React.useEffect(() => {
+      return () => {
+        console.log('🧹 ConversationBar ACTUALLY unmounting, cleaning up...')
+
+        // End conversation immediately (synchronous cleanup) using ref
+        if (conversationRef.current) {
+          try {
+            conversationRef.current.endSession()
+            console.log('✅ Conversation session ended on unmount')
+          } catch (error) {
+            console.warn('⚠️ Error ending session on unmount:', error)
+          }
+        }
+
+        // Notify backend asynchronously (fire and forget)
+        const apiBaseUrl = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
+        fetch(`${apiBaseUrl}/api/conversations/${agentId}/end`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: null }),
+          keepalive: true // Ensure request completes even if page is closing
+        }).catch(err => console.warn('Backend notification failed on unmount:', err))
+
+        // Always stop media stream
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((t) => t.stop())
+          mediaStreamRef.current = null
+          console.log('🎤 Media stream stopped on unmount')
+        }
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []) // EMPTY array - only run on mount/unmount, use refs for cleanup
+
+    // Handle page refresh/unload - end conversation
+    React.useEffect(() => {
+      const handleBeforeUnload = () => {
+        // End conversation if connected
+        if (agentState === "connected" || agentState === "connecting") {
+          // Use sendBeacon for reliable delivery even during page unload
+          const apiBaseUrl = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
+          const blob = new Blob(
+            [JSON.stringify({ sessionId: null })],
+            { type: 'application/json' }
+          )
+          navigator.sendBeacon(
+            `${apiBaseUrl}/api/conversations/${agentId}/end`,
+            blob
+          )
+          
+          // Also try to end session synchronously
+          try {
+            conversation.endSession()
+          } catch (error) {
+            console.warn('Error ending session on unload:', error)
+          }
+          
+          // Stop media stream
+          if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach((t) => t.stop())
+          }
+        }
+      }
+
+      window.addEventListener('beforeunload', handleBeforeUnload)
+      
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload)
+      }
+    }, [agentState, agentId, conversation])
 
     return (
       <div
@@ -253,6 +378,13 @@ export const ConversationBar = React.forwardRef<
                             </span>
                           </div>
                         )}
+                        {(agentState === "connected" || agentState === "connecting") && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-foreground/70 text-[10px] font-medium">
+                              Connected
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -295,13 +427,22 @@ export const ConversationBar = React.forwardRef<
                   </Button>
                   <Separator orientation="vertical" className="mx-1 -my-2.5" />
                   <Button
-                    variant="ghost"
-                    size="icon"
+                    variant={isConnected || agentState === "connecting" ? "destructive" : "ghost"}
+                    size={isConnected || agentState === "connecting" ? "default" : "icon"}
                     onClick={handleStartOrEnd}
                     disabled={agentState === "disconnecting"}
+                    className={cn(
+                      isConnected || agentState === "connecting" 
+                        ? "bg-red-500 hover:bg-red-600 text-white shadow-md px-3 gap-2" 
+                        : ""
+                    )}
+                    title={isConnected || agentState === "connecting" ? "End conversation" : "Start conversation"}
                   >
                     {isConnected || agentState === "connecting" ? (
-                      <XIcon className="h-5 w-5" />
+                      <>
+                        <XIcon className="h-4 w-4" />
+                        <span className="text-sm font-medium">End</span>
+                      </>
                     ) : (
                       <PhoneIcon className="h-5 w-5" />
                     )}

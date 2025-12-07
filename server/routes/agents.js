@@ -1,5 +1,5 @@
 import express from 'express';
-import { createConversationalAgent } from '../services/elevenlabs.service.js';
+import { createConversationalAgent, endConversation } from '../services/elevenlabs.service.js';
 
 const router = express.Router();
 
@@ -46,6 +46,37 @@ router.get('/courses/:id/agent', async (req, res, next) => {
     });
   } catch (error) {
     next(error);
+  }
+});
+
+/**
+ * POST /api/conversations/:agentId/end
+ * End a conversation session
+ * Also handles sendBeacon requests from beforeunload events
+ */
+router.post('/conversations/:agentId/end', async (req, res, next) => {
+  try {
+    const { agentId } = req.params;
+    
+    // Handle both regular JSON and sendBeacon (Blob) requests
+    let sessionId = null;
+    if (req.body && typeof req.body === 'object') {
+      sessionId = req.body.sessionId || null;
+    }
+
+    const result = await endConversation(agentId, sessionId);
+
+    // For sendBeacon requests, we don't need to wait for response
+    // But we'll still send a response for regular requests
+    res.json(result);
+  } catch (error) {
+    console.error('Error ending conversation:', error);
+    // For sendBeacon, errors are logged but we still return 200
+    if (req.headers['content-type']?.includes('application/json')) {
+      next(error);
+    } else {
+      res.status(200).json({ success: false, error: error.message });
+    }
   }
 });
 

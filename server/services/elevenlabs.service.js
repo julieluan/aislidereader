@@ -1,7 +1,6 @@
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import FormData from 'form-data';
 
-// Initialize client only if API key is available
 let client = null;
 if (process.env.ELEVENLABS_API_KEY) {
   client = new ElevenLabsClient({
@@ -9,7 +8,7 @@ if (process.env.ELEVENLABS_API_KEY) {
   });
   console.log('✅ ElevenLabs client initialized');
 } else {
-  console.warn('⚠️  ELEVENLABS_API_KEY not set - ElevenLabs features will use mock mode');
+  console.warn('⚠️  ELEVENLABS_API_KEY not set, check API key');
 }
 
 /**
@@ -128,10 +127,48 @@ Remember: You're here to help students learn and understand the material. Be sup
  */
 export async function getVoices() {
   try {
+    if (!client) {
+      throw new Error('ELEVENLABS_API_KEY not set in environment variables');
+    }
     const voices = await client.voices.getAll();
     return voices;
   } catch (error) {
     console.error('Error fetching voices:', error);
     throw new Error(`Failed to fetch voices: ${error.message}`);
+  }
+}
+
+/**
+ * End a conversation session
+ * Note: ElevenLabs conversations are managed client-side via WebRTC,
+ * but this endpoint can be used for logging and tracking purposes
+ *
+ * @param {string} agentId - Agent ID
+ * @param {string} sessionId - Optional session ID for tracking
+ * @returns {Promise<Object>} - Confirmation object
+ */
+export async function endConversation(agentId, sessionId = null) {
+  try {
+    if (!client) {
+      console.warn('ELEVENLABS_API_KEY not set - conversation end logged but not tracked on ElevenLabs');
+    }
+
+    // Log the conversation end
+    console.log(`Ending conversation for agent: ${agentId}${sessionId ? `, session: ${sessionId}` : ''}`);
+
+    // Note: ElevenLabs WebRTC conversations are managed client-side
+    // The actual connection is closed by the frontend, but we log it here
+    // In the future, if ElevenLabs adds server-side session management, we can implement it here
+
+    return {
+      success: true,
+      message: 'Conversation ended successfully',
+      agentId,
+      sessionId,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Error ending conversation:', error);
+    throw new Error(`Failed to end conversation: ${error.message}`);
   }
 }

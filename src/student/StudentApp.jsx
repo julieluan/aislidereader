@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, Layout, FileText, CheckCircle, Plus, Users, MessageSquare, PlayCircle, MessageCircle, Clock, BookOpen, TrendingUp, Award, Star, Link, Globe, Trash2, Trophy, Target, Flame, Medal, ArrowLeft } from 'lucide-react';
+import { ChevronRight, Layout, FileText, CheckCircle, Plus, Users, MessageSquare, PlayCircle, MessageCircle, Clock, BookOpen, TrendingUp, Award, Star, Link, Globe, Trash2, Trophy, Target, Flame, Medal, ArrowLeft, X } from 'lucide-react';
 import { ConversationBar } from '@/components/ui/conversation-bar';
 
 const StudentApp = () => {
@@ -70,7 +70,56 @@ const StudentApp = () => {
       }
     ]);
     const [agentConnected, setAgentConnected] = useState(false);
-    const AGENT_ID = "agent_1301kayr8fdneh8agzn2vx0hfra0";
+    const [agentId, setAgentId] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const endSessionRef = React.useRef(null);
+
+    // Fetch agent ID from backend
+    useEffect(() => {
+      const fetchAgentId = async () => {
+        try {
+          setLoading(true);
+          setError(null);
+
+          const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+          const response = await fetch(`${apiBaseUrl}/api/courses/${module.id}/agent`);
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch agent: ${response.status}`);
+          }
+
+          const data = await response.json();
+          
+          // Handle both camelCase (agentId) and snake_case (agent_id) from backend
+          // Also handle empty strings as "no agent"
+          const agentId = data.agentId || data.agent_id;
+          
+          // Backend returns { agentId: null, message: '...' } when no agent exists
+          // This is a valid response, not an error
+          if (agentId && typeof agentId === 'string' && agentId.trim().length > 0) {
+            setAgentId(agentId.trim());
+            console.log(`✅ Loaded agent ${agentId} for course "${module.title}"`);
+          } else {
+            // No agent created yet - this is expected, not an error
+            setAgentId(null);
+            console.log(`ℹ️ No agent found for course "${module.title}": ${data.message || 'Agent not created yet'}`);
+          }
+        } catch (err) {
+          console.error('❌ Error fetching agent:', err);
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      if (module?.id) {
+        fetchAgentId();
+      } else {
+        setError('Invalid course ID');
+        setLoading(false);
+      }
+    }, [module?.id, module?.title]);
 
     const handleMessage = (msg) => {
       setMessages(prev => [...prev, {
@@ -80,6 +129,111 @@ const StudentApp = () => {
       }]);
     };
 
+    // End conversation when exiting the view
+    const handleExit = async () => {
+      console.log('🔄 Exiting chat view, ending session...');
+      // End conversation if connected
+      if (endSessionRef.current) {
+        try {
+          await endSessionRef.current();
+          console.log('✅ Session ended successfully');
+        } catch (error) {
+          console.warn('⚠️ Error ending conversation on exit:', error);
+        }
+      } else {
+        console.warn('⚠️ No endSessionRef available');
+      }
+      // Call the original onExit callback
+      onExit();
+    };
+
+    // Show loading state
+    if (loading) {
+      return (
+        <div className="h-screen flex flex-col items-center justify-center bg-white">
+          <style>{styles}</style>
+          <div className="text-center animate-fade-in">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-500 flex items-center justify-center text-white animate-pulse">
+              <MessageCircle size={32} />
+            </div>
+            <p className="text-lg font-medium text-gray-900">Loading AI Tutor...</p>
+            <p className="text-sm text-gray-500 mt-2">Connecting to {module.title}</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Show error state - distinguish between API errors and no agent created
+    if (error) {
+      return (
+        <div className="h-screen flex flex-col bg-white">
+          <style>{styles}</style>
+          <header className="h-16 border-b border-gray-200 flex items-center px-6 bg-white shadow-sm">
+            <button
+              onClick={onExit}
+              className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-all duration-300"
+            >
+              <ArrowLeft size={20} />
+              <span className="font-medium">Back to Courses</span>
+            </button>
+          </header>
+          <div className="flex-1 flex flex-col items-center justify-center p-6">
+            <div className="text-center max-w-md animate-fade-in">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                <X size={32} />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Error Loading AI Tutor</h2>
+              <p className="text-gray-600 mb-4">{error}</p>
+              <button
+                onClick={onExit}
+                className="mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Back to Courses
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Show "not available" state when no agent exists (not an error)
+    if (!agentId) {
+      return (
+        <div className="h-screen flex flex-col bg-white">
+          <style>{styles}</style>
+          <header className="h-16 border-b border-gray-200 flex items-center px-6 bg-white shadow-sm">
+            <button
+              onClick={onExit}
+              className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-all duration-300"
+            >
+              <ArrowLeft size={20} />
+              <span className="font-medium">Back to Courses</span>
+            </button>
+          </header>
+          <div className="flex-1 flex flex-col items-center justify-center p-6">
+            <div className="text-center max-w-md animate-fade-in">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                <X size={32} />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">AI Tutor Not Available</h2>
+              <p className="text-gray-600 mb-4">
+                No AI tutor has been created for this course yet.
+              </p>
+              <p className="text-sm text-gray-500">
+                Please contact your instructor to create an AI tutor for this course.
+              </p>
+              <button
+                onClick={onExit}
+                className="mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Back to Courses
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="h-screen flex flex-col bg-white">
         <style>{styles}</style>
@@ -87,7 +241,7 @@ const StudentApp = () => {
         {/* Header */}
         <header className="h-16 border-b border-gray-200 flex items-center justify-between px-6 bg-white shadow-sm">
           <button
-            onClick={onExit}
+            onClick={handleExit}
             className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-all duration-300"
           >
             <ArrowLeft size={20} />
@@ -147,11 +301,12 @@ const StudentApp = () => {
         {/* Conversation Bar */}
         <div className="border-t border-gray-200 bg-white">
           <ConversationBar
-            agentId={AGENT_ID}
+            agentId={agentId}
+            endSessionRef={endSessionRef}
             onMessage={handleMessage}
             onConnect={() => {
               setAgentConnected(true);
-              console.log('✅ Agent connected to:', AGENT_ID);
+              console.log('✅ Agent connected to:', agentId);
             }}
             onDisconnect={() => {
               setAgentConnected(false);
