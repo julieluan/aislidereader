@@ -1,9 +1,30 @@
+// Load environment variables FIRST, before any other imports that might use them
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load .env file from the server directory
+const envPath = join(__dirname, '.env');
+const result = dotenv.config({ path: envPath });
+
+if (result.error) {
+  console.warn('⚠️  Failed to load .env file:', result.error.message);
+  console.warn('   Looking for .env at:', envPath);
+} else {
+  console.log('✅ Environment variables loaded from:', envPath);
+  if (process.env.ELEVENLABS_API_KEY) {
+    console.log('✅ ELEVENLABS_API_KEY found in environment');
+  } else {
+    console.warn('⚠️  ELEVENLABS_API_KEY not found in environment after loading .env');
+  }
+}
+
+// Now import other modules (they can use process.env)
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
-
-// Load environment variables
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;

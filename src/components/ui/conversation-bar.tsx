@@ -157,15 +157,30 @@ export const ConversationBar = React.forwardRef<
 
     const handleEndSession = React.useCallback(async () => {
       try {
+        console.log('🛑 Ending conversation session...')
         setAgentState("disconnecting")
-        
+
         // End the conversation on the frontend
-        conversation.endSession()
-        
+        // Check if endSession is async or sync
+        const endResult = conversation.endSession()
+        if (endResult && typeof endResult.then === 'function') {
+          await endResult
+        }
+        console.log('✅ ElevenLabs session ended')
+
+        // Stop media stream immediately
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((t) => {
+            t.stop()
+            console.log('🎤 Stopped media track:', t.kind)
+          })
+          mediaStreamRef.current = null
+        }
+
         // Notify backend that conversation is ending
         try {
           const apiBaseUrl = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:3001';
-          await fetch(`${apiBaseUrl}/api/conversations/${agentId}/end`, {
+          const response = await fetch(`${apiBaseUrl}/api/conversations/${agentId}/end`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -174,21 +189,19 @@ export const ConversationBar = React.forwardRef<
               sessionId: null // Can be enhanced with actual session tracking
             })
           })
+          if (response.ok) {
+            console.log('✅ Backend notified of conversation end')
+          }
         } catch (backendError) {
           // Log but don't fail if backend call fails
-          console.warn('Failed to notify backend of conversation end:', backendError)
-        }
-
-        // Stop media stream
-        if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach((t) => t.stop())
-          mediaStreamRef.current = null
+          console.warn('⚠️ Failed to notify backend of conversation end:', backendError)
         }
 
         setAgentState("disconnected")
         onDisconnect?.()
+        console.log('✅ Conversation fully ended and cleaned up')
       } catch (error) {
-        console.error('Error ending session:', error)
+        console.error('❌ Error ending session:', error)
         setAgentState("disconnected")
         onError?.(error as Error)
       }
@@ -257,9 +270,10 @@ export const ConversationBar = React.forwardRef<
     }, [endSessionRef, handleEndSession])
 
     // Cleanup on component unmount ONLY - end conversation if connected
+    // Note: With Strict Mode disabled, this will only run on actual unmount
     React.useEffect(() => {
       return () => {
-        console.log('🧹 ConversationBar ACTUALLY unmounting, cleaning up...')
+        console.log('🧹 ConversationBar unmounting, cleaning up...')
 
         // End conversation immediately (synchronous cleanup) using ref
         if (conversationRef.current) {
@@ -288,7 +302,7 @@ export const ConversationBar = React.forwardRef<
         }
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []) // EMPTY array - only run on mount/unmount, use refs for cleanup
+    }, []) // EMPTY array - only run on actual mount/unmount (Strict Mode now disabled)
 
     // Handle page refresh/unload - end conversation
     React.useEffect(() => {
@@ -432,13 +446,25 @@ export const ConversationBar = React.forwardRef<
                     onClick={handleStartOrEnd}
                     disabled={agentState === "disconnecting"}
                     className={cn(
-                      isConnected || agentState === "connecting" 
-                        ? "bg-red-500 hover:bg-red-600 text-white shadow-md px-3 gap-2" 
-                        : ""
+                      isConnected || agentState === "connecting"
+                        ? "bg-red-500 hover:bg-red-600 text-white shadow-md px-3 gap-2"
+                        : "",
+                      agentState === "disconnecting" && "opacity-50 cursor-not-allowed"
                     )}
-                    title={isConnected || agentState === "connecting" ? "End conversation" : "Start conversation"}
+                    title={
+                      agentState === "disconnecting"
+                        ? "Ending conversation..."
+                        : isConnected || agentState === "connecting"
+                          ? "End conversation"
+                          : "Start conversation"
+                    }
                   >
-                    {isConnected || agentState === "connecting" ? (
+                    {agentState === "disconnecting" ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        <span className="text-sm font-medium">Ending...</span>
+                      </>
+                    ) : isConnected || agentState === "connecting" ? (
                       <>
                         <XIcon className="h-4 w-4" />
                         <span className="text-sm font-medium">End</span>

@@ -40,9 +40,12 @@ router.get('/courses/:id/agent', async (req, res, next) => {
     const { id } = req.params;
 
     // TODO: Fetch agent_id from database
+    // For now, use single hardcoded agent for all courses (development)
+    const SHARED_AGENT_ID = 'agent_1301kayr8fdneh8agzn2vx0hfra0';
+
     res.json({
-      agentId: null,
-      message: 'Database not yet connected'
+      agentId: SHARED_AGENT_ID,
+      message: 'Using shared agent for development'
     });
   } catch (error) {
     next(error);

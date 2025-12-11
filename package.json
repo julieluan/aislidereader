@@ -12,7 +12,8 @@
     "dev:api": "cd server && npm run dev",
     "build": "vite build && cd server && npm run build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check-env": "node check-env.js"
   },
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.25.0",

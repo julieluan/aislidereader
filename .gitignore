@@ -21,11 +21,16 @@ server/*.db
 server/*.sqlite
 
 # Environment variables
+# Ignore local environment files (contain secrets/API keys)
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Keep base .env.development and .env.production as templates
+# These can be committed but MUST NOT contain real API keys
+# Real keys should be set via deployment platform (Raindrop, Vercel, etc.)
 
 # Editor directories and files
 .vscode/*

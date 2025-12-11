@@ -347,7 +347,292 @@ const StudentApp = () => {
     );
   }
 
-  // Module detail view (when course is selected but not in learning mode yet)
+  if (selectedModule) {
+    const [messages, setMessages] = useState([
+      {
+        source: 'ai',
+        message: `Hi! I'm your AI tutor for "${module.title}". I'm here to help you learn about ${module.subject}. Feel free to ask me any questions!`,
+        timestamp: new Date()
+      }
+    ]);
+    const [agentConnected, setAgentConnected] = useState(false);
+    const [agentId, setAgentId] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const endSessionRef = React.useRef(null);
+
+    // Fetch agent ID from backend
+    useEffect(() => {
+      const fetchAgentId = async () => {
+        try {
+          setLoading(true);
+          setError(null);
+
+          const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+          const response = await fetch(`${apiBaseUrl}/api/courses/${module.id}/agent`);
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch agent: ${response.status}`);
+          }
+
+          const data = await response.json();
+          
+          // Handle both camelCase (agentId) and snake_case (agent_id) from backend
+          // Also handle empty strings as "no agent"
+          const agentId = data.agentId || data.agent_id;
+          
+          // Backend returns { agentId: null, message: '...' } when no agent exists
+          // This is a valid response, not an error
+          if (agentId && typeof agentId === 'string' && agentId.trim().length > 0) {
+            setAgentId(agentId.trim());
+            console.log(`✅ Loaded agent ${agentId} for course "${module.title}"`);
+          } else {
+            // No agent created yet - this is expected, not an error
+            setAgentId(null);
+            console.log(`ℹ️ No agent found for course "${module.title}": ${data.message || 'Agent not created yet'}`);
+          }
+        } catch (err) {
+          console.error('❌ Error fetching agent:', err);
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      if (module?.id) {
+        fetchAgentId();
+      } else {
+        setError('Invalid course ID');
+        setLoading(false);
+      }
+    }, [module?.id, module?.title]);
+
+    const handleMessage = (msg) => {
+      setMessages(prev => [...prev, {
+        source: msg.source,
+        message: msg.message,
+        timestamp: new Date()
+      }]);
+    };
+
+    // End conversation when exiting the view
+    const handleExit = async () => {
+      console.log('🔄 Exiting chat view, ending session...');
+      // End conversation if connected
+      if (endSessionRef.current) {
+        try {
+          await endSessionRef.current();
+          console.log('✅ Session ended successfully');
+        } catch (error) {
+          console.warn('⚠️ Error ending conversation on exit:', error);
+        }
+      } else {
+        console.warn('⚠️ No endSessionRef available');
+      }
+      // Call the original onExit callback
+      onExit();
+    };
+
+    // Show loading state
+    if (loading) {
+      return (
+        <div className="h-screen flex flex-col items-center justify-center bg-white">
+          <style>{styles}</style>
+          <div className="text-center animate-fade-in">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-500 flex items-center justify-center text-white animate-pulse">
+              <MessageCircle size={32} />
+            </div>
+            <p className="text-lg font-medium text-gray-900">Loading AI Tutor...</p>
+            <p className="text-sm text-gray-500 mt-2">Connecting to {module.title}</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Show error state - distinguish between API errors and no agent created
+    if (error) {
+      return (
+        <div className="h-screen flex flex-col bg-white">
+          <style>{styles}</style>
+          <header className="h-16 border-b border-gray-200 flex items-center px-6 bg-white shadow-sm">
+            <button
+              onClick={onExit}
+              className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-all duration-300"
+            >
+              <ArrowLeft size={20} />
+              <span className="font-medium">Back to Courses</span>
+            </button>
+          </header>
+          <div className="flex-1 flex flex-col items-center justify-center p-6">
+            <div className="text-center max-w-md animate-fade-in">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                <X size={32} />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Error Loading AI Tutor</h2>
+              <p className="text-gray-600 mb-4">{error}</p>
+              <button
+                onClick={onExit}
+                className="mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Back to Courses
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Show "not available" state when no agent exists (not an error)
+    if (!agentId) {
+      return (
+        <div className="h-screen flex flex-col bg-white">
+          <style>{styles}</style>
+          <header className="h-16 border-b border-gray-200 flex items-center px-6 bg-white shadow-sm">
+            <button
+              onClick={onExit}
+              className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-all duration-300"
+            >
+              <ArrowLeft size={20} />
+              <span className="font-medium">Back to Courses</span>
+            </button>
+          </header>
+          <div className="flex-1 flex flex-col items-center justify-center p-6">
+            <div className="text-center max-w-md animate-fade-in">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                <X size={32} />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">AI Tutor Not Available</h2>
+              <p className="text-gray-600 mb-4">
+                No AI tutor has been created for this course yet.
+              </p>
+              <p className="text-sm text-gray-500">
+                Please contact your instructor to create an AI tutor for this course.
+              </p>
+              <button
+                onClick={onExit}
+                className="mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Back to Courses
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="h-screen flex flex-col bg-white">
+        <style>{styles}</style>
+
+        {/* Header */}
+        <header className="h-16 border-b border-gray-200 flex items-center justify-between px-6 bg-white shadow-sm">
+          <button
+            onClick={handleExit}
+            className="flex items-center gap-2 text-gray-600 hover:text-blue-600 transition-all duration-300"
+          >
+            <ArrowLeft size={20} />
+            <span className="font-medium">Back to Courses</span>
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="text-center">
+              <h2 className="text-lg font-bold text-gray-900">{module.title}</h2>
+              <p className="text-xs text-gray-500">{module.subject} - {module.instructor}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${agentConnected ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+            <span className="text-sm text-gray-600">
+              {agentConnected ? 'Connected' : 'Disconnected'}
+            </span>
+          </div>
+        </header>
+
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          <div className="max-w-4xl mx-auto space-y-4">
+            {messages.length === 0 && (
+              <div className="text-center text-gray-400 mt-12">
+                <MessageCircle size={48} className="mx-auto mb-4 opacity-50" />
+                <p className="text-lg mb-2">Start learning with your AI tutor!</p>
+                <p className="text-sm">Click the phone icon below to connect and start the conversation.</p>
+              </div>
+            )}
+
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.source === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
+                <div className={`max-w-[70%] rounded-2xl px-4 py-3 ${
+                  msg.source === 'user'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-900 shadow-md border border-gray-200'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    {msg.source === 'ai' && (
+                      <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs flex-shrink-0 mt-1">
+                        AI
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                      <p className={`text-xs mt-1 ${msg.source === 'user' ? 'text-blue-100' : 'text-gray-400'}`}>
+                        {msg.timestamp?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Conversation Bar */}
+        <div className="border-t border-gray-200 bg-white">
+          <ConversationBar
+            agentId={agentId}
+            endSessionRef={endSessionRef}
+            onMessage={handleMessage}
+            onConnect={() => {
+              setAgentConnected(true);
+              console.log('✅ Agent connected to:', agentId);
+            }}
+            onDisconnect={() => {
+              setAgentConnected(false);
+              console.log('❌ Agent disconnected');
+            }}
+            onError={(error) => {
+              console.error('❌ Agent error:', error);
+              setMessages(prev => [...prev, {
+                source: 'ai',
+                message: `Error: ${error.message}. Please try reconnecting.`,
+                timestamp: new Date()
+              }]);
+            }}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  const styles = `
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes scaleIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+    .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+    .animate-fade-in-up { animation: fadeInUp 0.5s ease-out; }
+    .animate-scale-in { animation: scaleIn 0.3s ease-out; }
+  `;
+
+  // If in learning mode, show agent chat view
+  if (isLearning && selectedModule) {
+    return (
+      <AgentChatView
+        module={selectedModule}
+        onExit={() => {
+          setIsLearning(false);
+        }}
+      />
+    );
+  }
+
   if (selectedModule) {
     return (
       <div className="h-screen bg-white flex flex-col overflow-hidden">

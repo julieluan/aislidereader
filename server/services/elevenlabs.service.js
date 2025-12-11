@@ -2,13 +2,22 @@ import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import FormData from 'form-data';
 
 let client = null;
-if (process.env.ELEVENLABS_API_KEY) {
-  client = new ElevenLabsClient({
-    apiKey: process.env.ELEVENLABS_API_KEY
-  });
-  console.log('✅ ElevenLabs client initialized');
-} else {
-  console.warn('⚠️  ELEVENLABS_API_KEY not set, check API key');
+
+function getClient() {
+  if (client) {
+    return client;
+  }
+  
+  if (process.env.ELEVENLABS_API_KEY) {
+    client = new ElevenLabsClient({
+      apiKey: process.env.ELEVENLABS_API_KEY
+    });
+    console.log('✅ ElevenLabs client initialized');
+    return client;
+  } else {
+    console.warn('⚠️  ELEVENLABS_API_KEY not set, check API key');
+    return null;
+  }
 }
 
 /**
@@ -62,6 +71,7 @@ export async function transcribeAudio(audioBuffer) {
  */
 export async function createConversationalAgent(course, slides, voiceId) {
   try {
+    const client = getClient();
     if (!client) {
       throw new Error('ELEVENLABS_API_KEY not set in environment variables');
     }
@@ -127,6 +137,7 @@ Remember: You're here to help students learn and understand the material. Be sup
  */
 export async function getVoices() {
   try {
+    const client = getClient();
     if (!client) {
       throw new Error('ELEVENLABS_API_KEY not set in environment variables');
     }
@@ -149,6 +160,7 @@ export async function getVoices() {
  */
 export async function endConversation(agentId, sessionId = null) {
   try {
+    const client = getClient();
     if (!client) {
       console.warn('ELEVENLABS_API_KEY not set - conversation end logged but not tracked on ElevenLabs');
     }
